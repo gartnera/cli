@@ -24,9 +24,8 @@ func TestLiveSigstoreVerifier(t *testing.T) {
 		})
 
 		res := verifier.Verify(attestations, publicGoodPolicy(t))
-		require.Error(t, res.Error)
-		require.ErrorContains(t, res.Error, "verifying with issuer \"sigstore.dev\"")
-		require.Nil(t, res.VerifyResults)
+		require.NoError(t, res.Error)
+		require.Len(t, res.VerifyResults, 0)
 	})
 
 	t.Run("with valid artifact and JSON lines file containing multiple Sigstore bundles", func(t *testing.T) {

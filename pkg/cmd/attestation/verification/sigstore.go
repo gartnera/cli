@@ -170,22 +170,13 @@ func getLowestCertInChain(ca *root.CertificateAuthority) (*x509.Certificate, err
 }
 
 func (v *LiveSigstoreVerifier) Verify(attestations []*api.Attestation, policy verify.PolicyBuilder) *SigstoreResults {
-	// initialize the processing results before attempting to verify
-	// with multiple verifiers
-	results := make([]*AttestationProcessingResult, len(attestations))
-	for i, att := range attestations {
-		apr := &AttestationProcessingResult{
-			Attestation: att,
-		}
-		results[i] = apr
-	}
+	results := make([]*AttestationProcessingResult, 0)
 
-	totalAttestations := len(attestations)
-	for i, apr := range results {
-		v.config.Logger.VerbosePrintf("Verifying attestation %d/%d against the configured Sigstore trust roots\n", i+1, totalAttestations)
+	for i, attestation := range attestations {
+		v.config.Logger.VerbosePrintf("Verifying attestation %d/%d against the configured Sigstore trust roots\n", i+1, len(attestations))
 
 		// determine which verifier should attempt verification against the bundle
-		verifier, issuer, err := v.chooseVerifier(apr.Attestation.Bundle)
+		verifier, issuer, err := v.chooseVerifier(attestation.Bundle)
 		if err != nil {
 			return &SigstoreResults{
 				Error: fmt.Errorf("failed to find recognized issuer from bundle content: %v", err),
@@ -194,24 +185,23 @@ func (v *LiveSigstoreVerifier) Verify(attestations []*api.Attestation, policy ve
 
 		v.config.Logger.VerbosePrintf("Attempting verification against issuer \"%s\"\n", issuer)
 		// attempt to verify the attestation
-		result, err := verifier.Verify(apr.Attestation.Bundle, policy)
+		result, err := verifier.Verify(attestation.Bundle, policy)
 		// if verification fails, create the error and exit verification early
 		if err != nil {
 			v.config.Logger.VerbosePrint(v.config.Logger.ColorScheme.Redf(
 				"Failed to verify against issuer \"%s\" \n\n", issuer,
 			))
-
-			return &SigstoreResults{
-				Error: fmt.Errorf("verifying with issuer \"%s\"", issuer),
-			}
+			continue
 		}
-
 		// if verification is successful, add the result
 		// to the AttestationProcessingResult entry
 		v.config.Logger.VerbosePrint(v.config.Logger.ColorScheme.Greenf(
 			"SUCCESS - attestation signature verified with \"%s\"\n", issuer,
 		))
-		apr.VerificationResult = result
+		results = append(results, &AttestationProcessingResult{
+			Attestation:        attestation,
+			VerificationResult: result,
+		})
 	}
 
 	return &SigstoreResults{
