@@ -1,5 +1,3 @@
-//go:build integration
-
 package verification
 
 import (
@@ -24,7 +22,8 @@ func TestLiveSigstoreVerifier(t *testing.T) {
 		})
 
 		res := verifier.Verify(attestations, publicGoodPolicy(t))
-		require.NoError(t, res.Error)
+		require.Error(t, res.Error)
+		require.ErrorContains(t, res.Error, "verifying with issuer \"sigstore.dev\"")
 		require.Len(t, res.VerifyResults, 0)
 	})
 

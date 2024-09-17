@@ -172,6 +172,9 @@ func getLowestCertInChain(ca *root.CertificateAuthority) (*x509.Certificate, err
 func (v *LiveSigstoreVerifier) Verify(attestations []*api.Attestation, policy verify.PolicyBuilder) *SigstoreResults {
 	results := make([]*AttestationProcessingResult, 0)
 
+	var vErr error
+	var result *verify.VerificationResult
+
 	for i, attestation := range attestations {
 		v.config.Logger.VerbosePrintf("Verifying attestation %d/%d against the configured Sigstore trust roots\n", i+1, len(attestations))
 
@@ -185,12 +188,13 @@ func (v *LiveSigstoreVerifier) Verify(attestations []*api.Attestation, policy ve
 
 		v.config.Logger.VerbosePrintf("Attempting verification against issuer \"%s\"\n", issuer)
 		// attempt to verify the attestation
-		result, err := verifier.Verify(attestation.Bundle, policy)
+		result, vErr = verifier.Verify(attestation.Bundle, policy)
 		// if verification fails, create the error and exit verification early
-		if err != nil {
+		if vErr != nil {
 			v.config.Logger.VerbosePrint(v.config.Logger.ColorScheme.Redf(
 				"Failed to verify against issuer \"%s\" \n\n", issuer,
 			))
+			vErr = fmt.Errorf("verifying with issuer \"%s\": %w", issuer, vErr)
 			continue
 		}
 		// if verification is successful, add the result
@@ -204,9 +208,14 @@ func (v *LiveSigstoreVerifier) Verify(attestations []*api.Attestation, policy ve
 		})
 	}
 
-	return &SigstoreResults{
+	sResults := &SigstoreResults{
 		VerifyResults: results,
 	}
+
+	if len(results) == 0 {
+		sResults.Error = vErr
+	}
+	return sResults
 }
 
 func newCustomVerifier(trustedRoot *root.TrustedRoot) (*verify.SignedEntityVerifier, error) {
